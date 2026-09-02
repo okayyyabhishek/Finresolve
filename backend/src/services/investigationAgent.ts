@@ -20,7 +20,7 @@ export interface AgentInvestigationOutput {
 export class InvestigationAgent {
   private ai: GoogleGenAI | null = null;
   private modelName: string;
-  private rateLimitResetTime: number = 0;
+  private static rateLimitResetTime: number = 0;
 
   constructor() {
     this.modelName = env.GEMINI_MODEL || 'gemini-2.5-flash';
@@ -48,7 +48,7 @@ export class InvestigationAgent {
     }
 
     // Fast-path if Gemini is currently rate-limited (avoids blocking batch uploads)
-    if (Date.now() < this.rateLimitResetTime) {
+    if (Date.now() < InvestigationAgent.rateLimitResetTime) {
       return this.executeDeterministicInvestigation(
         exception,
         startTime,
@@ -406,7 +406,11 @@ Use the tools to inspect the records, compare calculations, and provide the stru
     let attempt = 0;
     while (attempt <= maxRetries) {
       try {
-        const response = await this.ai.models.generateContent({
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Gemini investigation API call timed out after 8s')), 8000)
+        );
+
+        const geminiPromise = this.ai.models.generateContent({
           model: this.modelName,
           contents,
           config: {
@@ -415,6 +419,8 @@ Use the tools to inspect the records, compare calculations, and provide the stru
             temperature: 0.1
           }
         });
+
+        const response: any = await Promise.race([geminiPromise, timeoutPromise]);
         return response;
       } catch (err: any) {
         const errMsg = err?.message || String(err);
@@ -423,21 +429,23 @@ Use the tools to inspect the records, compare calculations, and provide the stru
           errMsg.includes('429') ||
           errMsg.includes('quota') ||
           errMsg.includes('RESOURCE_EXHAUSTED') ||
-          errMsg.includes('rate-limit');
+          errMsg.includes('rate-limit') ||
+          errMsg.includes('503') ||
+          errMsg.includes('high demand');
 
         if (isQuotaOrRateLimit) {
-          // Set 1 minute cooldown to prevent blocking other batch items
-          this.rateLimitResetTime = Date.now() + 60_000;
+          // Set 10-minute cooldown so all remaining exceptions use deterministic engine instantaneously
+          InvestigationAgent.rateLimitResetTime = Date.now() + 10 * 60_000;
           throw err;
         }
 
         attempt++;
         if (attempt <= maxRetries) {
           console.warn(
-            `⚠️ [InvestigationAgent] Gemini generateContent failed (attempt ${attempt}/${maxRetries + 1}). Retrying in 1000ms...`,
+            `⚠️ [InvestigationAgent] Gemini generateContent failed (attempt ${attempt}/${maxRetries + 1}). Retrying in 500ms...`,
             errMsg
           );
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+          await new Promise((resolve) => setTimeout(resolve, 500));
         } else {
           throw err;
         }

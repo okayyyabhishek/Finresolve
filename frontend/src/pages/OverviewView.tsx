@@ -51,7 +51,7 @@ export const OverviewView: React.FC = () => {
   const handleResetBenchmark = async () => {
     if (
       !window.confirm(
-        'Reset database and restore pristine benchmark batch (BATCH-FR-DEMO with 75 records)?'
+        'Are you sure you want to reset all data? All settlement batches, exceptions, and audit records will be completely removed.'
       )
     ) {
       return;
@@ -59,9 +59,10 @@ export const OverviewView: React.FC = () => {
     setIsResetting(true);
     try {
       await api.resetBatch();
+      window.dispatchEvent(new CustomEvent('finresolve:batch-uploaded'));
       await loadData();
     } catch (err: any) {
-      console.error('Failed to reset benchmark data', err);
+      console.error('Failed to reset data', err);
     } finally {
       setIsResetting(false);
     }
@@ -75,11 +76,13 @@ export const OverviewView: React.FC = () => {
     );
   }
 
+  const hasData = (metrics?.totalActualExceptions ?? 0) > 0;
+
   const statCards = [
     {
       title: 'Total Exceptions',
-      value: metrics?.totalActualExceptions || 40,
-      subtitle: '10 Anomaly Categories Tracked',
+      value: metrics?.totalActualExceptions ?? 0,
+      subtitle: hasData ? '10 Anomaly Categories Tracked' : 'No active exceptions',
       icon: AlertTriangle,
       color: 'text-indigo-600 dark:text-indigo-400',
       bgGlow: 'bg-indigo-50/60 dark:bg-indigo-950/40',
@@ -87,8 +90,8 @@ export const OverviewView: React.FC = () => {
     },
     {
       title: 'Auto-Resolved',
-      value: metrics?.totalAutoResolved || 21,
-      subtitle: `${metrics?.coverage ?? 52.5}% Autonomous Coverage`,
+      value: metrics?.totalAutoResolved ?? 0,
+      subtitle: `${metrics?.coverage ?? 0}% Autonomous Coverage`,
       icon: ShieldCheck,
       color: 'text-emerald-600 dark:text-emerald-400',
       bgGlow: 'bg-emerald-50/60 dark:bg-emerald-950/40',
@@ -96,8 +99,8 @@ export const OverviewView: React.FC = () => {
     },
     {
       title: 'Requires Review',
-      value: metrics?.totalEscalated || 19,
-      subtitle: `${metrics?.escalationRate ?? 47.5}% Routed to Controller`,
+      value: metrics?.totalEscalated ?? 0,
+      subtitle: `${metrics?.escalationRate ?? 0}% Routed to Controller`,
       icon: Clock,
       color: 'text-amber-600 dark:text-amber-400',
       bgGlow: 'bg-amber-50/60 dark:bg-amber-950/40',
@@ -350,12 +353,12 @@ export const OverviewView: React.FC = () => {
               <div>
                 <div className="flex justify-between text-xs font-bold mb-1.5">
                   <span className="text-slate-600 dark:text-slate-400">Policy Gate Accuracy</span>
-                  <span className="text-emerald-600 dark:text-emerald-400">{metrics?.autoResolutionAccuracy ?? 100}%</span>
+                  <span className="text-emerald-600 dark:text-emerald-400">{hasData ? `${metrics?.autoResolutionAccuracy ?? 100}%` : '0%'}</span>
                 </div>
                 <div className="h-2 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-emerald-500 rounded-full"
-                    style={{ width: `${metrics?.autoResolutionAccuracy ?? 100}%` }}
+                    className="h-full bg-emerald-500 rounded-full transition-all"
+                    style={{ width: `${hasData ? (metrics?.autoResolutionAccuracy ?? 100) : 0}%` }}
                   />
                 </div>
               </div>
@@ -363,12 +366,12 @@ export const OverviewView: React.FC = () => {
               <div>
                 <div className="flex justify-between text-xs font-bold mb-1.5">
                   <span className="text-slate-600 dark:text-slate-400">Anomaly Detection Rate</span>
-                  <span className="text-indigo-600 dark:text-indigo-400">{metrics?.exceptionDetectionAccuracy ?? 100}%</span>
+                  <span className="text-indigo-600 dark:text-indigo-400">{hasData ? `${metrics?.exceptionDetectionAccuracy ?? 100}%` : '0%'}</span>
                 </div>
                 <div className="h-2 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-indigo-500 rounded-full"
-                    style={{ width: `${metrics?.exceptionDetectionAccuracy ?? 100}%` }}
+                    className="h-full bg-indigo-500 rounded-full transition-all"
+                    style={{ width: `${hasData ? (metrics?.exceptionDetectionAccuracy ?? 100) : 0}%` }}
                   />
                 </div>
               </div>
@@ -380,8 +383,8 @@ export const OverviewView: React.FC = () => {
                 </div>
                 <div className="h-2 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-emerald-500 rounded-full"
-                    style={{ width: `100%` }}
+                    className="h-full bg-emerald-500 rounded-full transition-all"
+                    style={{ width: hasData ? '100%' : '0%' }}
                   />
                 </div>
               </div>

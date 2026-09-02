@@ -131,12 +131,18 @@ ${contextualData}
     const client = getAIClient();
     if (client) {
       try {
-        const response = await client.models.generateContent({
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Gemini chat request timed out after 8s')), 8000)
+        );
+
+        const geminiPromise = client.models.generateContent({
           model: env.GEMINI_MODEL,
           contents: [
             { role: 'user', parts: [{ text: `${systemPrompt}\n\nUser Question: ${message}` }] }
           ]
         });
+
+        const response: any = await Promise.race([geminiPromise, timeoutPromise]);
 
         const replyText = response.text?.trim();
         if (replyText) {
@@ -153,7 +159,7 @@ ${contextualData}
           return;
         }
       } catch (geminiError: any) {
-        console.warn('Gemini API call warning in chat:', geminiError.message);
+        console.warn('Gemini API call warning in chat:', geminiError?.message || geminiError);
       }
     }
 

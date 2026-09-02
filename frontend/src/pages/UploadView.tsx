@@ -91,7 +91,7 @@ export const UploadView: React.FC = () => {
   const handleResetBenchmark = async () => {
     if (
       !window.confirm(
-        'Reset database and restore pristine benchmark batch (BATCH-FR-DEMO with 75 records)?'
+        'Are you sure you want to reset all data? All settlement batches, exceptions, and audit entries will be permanently cleared.'
       )
     ) {
       return;
@@ -99,13 +99,13 @@ export const UploadView: React.FC = () => {
     setIsResetting(true);
     try {
       await api.resetBatch();
-      setSuccessMsg('Database successfully reset to clean benchmark dataset (BATCH-FR-DEMO).');
+      setSuccessMsg('All batch data and ledger entries have been completely cleared.');
       window.dispatchEvent(new CustomEvent('finresolve:batch-uploaded'));
       setTimeout(() => {
         navigate('/');
-      }, 1000);
+      }, 500);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to reset benchmark data');
+      setErrorMsg(err.message || 'Failed to reset data');
     } finally {
       setIsResetting(false);
     }

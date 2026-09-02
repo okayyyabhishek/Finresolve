@@ -30,17 +30,18 @@ services:
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.6-flash}
       PORT: 3001
       NODE_ENV: production
-      FRONTEND_URL: http://localhost:3000
+      FRONTEND_URL: http://16.171.43.78:3000,http://16.171.43.78,http://localhost:3000
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: http://localhost:3001/api/v1
+        VITE_API_URL: /api/v1
     container_name: finresolve-frontend
     restart: unless-stopped
     ports:
+      - "80:80"
       - "3000:80"
     depends_on:
       - backend

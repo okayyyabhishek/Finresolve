@@ -21,6 +21,8 @@ RUN printf 'server {\n\
   root /usr/share/nginx/html;\n\
   index index.html;\n\
 \n\
+  client_max_body_size 25M;\n\
+\n\
   location / {\n\
     try_files $uri $uri/ /index.html;\n\
   }\n\
@@ -31,6 +33,10 @@ RUN printf 'server {\n\
     proxy_set_header X-Real-IP $remote_addr;\n\
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n\
     proxy_set_header X-Forwarded-Proto $scheme;\n\
+    proxy_connect_timeout 300s;\n\
+    proxy_send_timeout 300s;\n\
+    proxy_read_timeout 300s;\n\
+    send_timeout 300s;\n\
   }\n\
 \n\
   # Cache static assets\n\

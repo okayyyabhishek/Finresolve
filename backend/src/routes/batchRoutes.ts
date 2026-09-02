@@ -450,49 +450,55 @@ router.post('/process', async (req: Request, res: Response, next: NextFunction):
     const investigationResults: any[] = [];
     const auditResults: any[] = [];
 
-    // 2. INVESTIGATION & 3. POLICY & 4. AUDIT PHASES (Sequential)
+    // 2. INVESTIGATION & 3. POLICY & 4. AUDIT PHASES (Bounded Concurrency)
     let processedCount = 0;
-    for (const exp of exceptions) {
-      exp.status = 'investigating';
-      await exp.save();
+    const processChunkSize = 8;
+    for (let i = 0; i < exceptions.length; i += processChunkSize) {
+      const chunk = exceptions.slice(i, i + processChunkSize);
+      await Promise.all(
+        chunk.map(async (exp, cIdx) => {
+          exp.status = 'investigating';
+          await exp.save();
 
-      // a. Autonomous Investigation
-      const invOutput = await investigationAgent.investigate(exp);
+          // a. Autonomous Investigation
+          const invOutput = await investigationAgent.investigate(exp);
 
-      const investigationDoc = new Investigation({
-        investigationId: `INV-${exp.exceptionId.replace('EXP-', '')}-${Date.now().toString().slice(-4)}`,
-        exceptionId: exp.exceptionId,
-        rootCause: invOutput.rootCause,
-        evidence: invOutput.evidence,
-        confidence: toDecimal128(invOutput.confidence),
-        evidenceCompleteness: toDecimal128(invOutput.evidenceCompleteness),
-        recommendedAction: invOutput.recommendedAction,
-        reasoning: invOutput.reasoning,
-        agentModel: invOutput.agentModel,
-        toolsUsed: invOutput.toolsUsed,
-        durationMs: invOutput.durationMs,
-        batchId
-      });
-      await investigationDoc.save();
-      investigationResults.push(investigationDoc);
+          const investigationDoc = new Investigation({
+            investigationId: `INV-${exp.exceptionId.replace('EXP-', '')}-${Date.now().toString().slice(-4)}-${i + cIdx}`,
+            exceptionId: exp.exceptionId,
+            rootCause: invOutput.rootCause,
+            evidence: invOutput.evidence,
+            confidence: toDecimal128(invOutput.confidence),
+            evidenceCompleteness: toDecimal128(invOutput.evidenceCompleteness),
+            recommendedAction: invOutput.recommendedAction,
+            reasoning: invOutput.reasoning,
+            agentModel: invOutput.agentModel,
+            toolsUsed: invOutput.toolsUsed,
+            durationMs: invOutput.durationMs,
+            batchId
+          });
+          await investigationDoc.save();
+          investigationResults.push(investigationDoc);
 
-      // b. Deterministic Policy Gate Evaluation
-      const policyResult = PolicyGate.evaluate(investigationDoc, exp);
+          // b. Deterministic Policy Gate Evaluation
+          const policyResult = PolicyGate.evaluate(investigationDoc, exp);
 
-      // c. Update Exception status
-      exp.status = policyResult.decision === 'auto_resolve' ? 'auto_resolved' : 'escalated';
-      await exp.save();
+          // c. Update Exception status
+          exp.status = policyResult.decision === 'auto_resolve' ? 'auto_resolved' : 'escalated';
+          await exp.save();
 
-      // d. Create Audit Record
-      const auditRecord = await AuditService.recordPolicyEvaluation({
-        exception: exp,
-        investigation: investigationDoc,
-        policyResult,
-        batchId
-      });
-      auditResults.push(auditRecord);
+          // d. Create Audit Record
+          const auditRecord = await AuditService.recordPolicyEvaluation({
+            exception: exp,
+            investigation: investigationDoc,
+            policyResult,
+            batchId
+          });
+          auditResults.push(auditRecord);
+        })
+      );
 
-      processedCount++;
+      processedCount += chunk.length;
       batchProcessingStatus.set(batchId, {
         status: 'processing',
         stage: 'investigating',
@@ -541,9 +547,9 @@ router.post('/process', async (req: Request, res: Response, next: NextFunction):
 
 /**
  * POST /api/v1/batch/reset
- * Purges all custom test records and restores the pristine benchmark demo batch (BATCH-FR-DEMO).
+ * Purges all records and leaves the system completely clean and empty (no entries).
  */
-router.post('/reset', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.post('/reset', async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     // 1. Purge all existing collections
     await Promise.all([
@@ -558,60 +564,19 @@ router.post('/reset', async (req: Request, res: Response, next: NextFunction): P
       AuditRecord.deleteMany({})
     ]);
 
-    // 2. Generate clean benchmark dataset (75 records)
-    const batchId = 'BATCH-FR-DEMO';
-    const genSummary = await dataGenerator.generateBatch(batchId, 42);
-
-    // 3. Reconcile
-    const reconResult = await reconciliationEngine.reconcileBatch(batchId);
-    const exceptions = await Exception.find({ batchId });
-
-    // 4. Investigate & Policy Gate
-    for (const exp of exceptions) {
-      exp.status = 'investigating';
-      await exp.save();
-
-      const invOutput = await investigationAgent.executeDeterministicInvestigation(exp);
-      const invDoc = new Investigation({
-        investigationId: `INV-${exp.exceptionId.replace('EXP-', '')}-001`,
-        exceptionId: exp.exceptionId,
-        rootCause: invOutput.rootCause,
-        evidence: invOutput.evidence,
-        confidence: toDecimal128(invOutput.confidence),
-        evidenceCompleteness: toDecimal128(invOutput.evidenceCompleteness),
-        recommendedAction: invOutput.recommendedAction,
-        reasoning: invOutput.reasoning,
-        agentModel: 'Deterministic Rules Engine (Benchmark Mode)',
-        toolsUsed: invOutput.toolsUsed,
-        durationMs: invOutput.durationMs,
-        batchId
-      });
-      await invDoc.save();
-
-      const policyResult = PolicyGate.evaluate(invDoc, exp);
-      exp.status = policyResult.decision === 'auto_resolve' ? 'auto_resolved' : 'escalated';
-      await exp.save();
-
-      await AuditService.recordPolicyEvaluation({
-        exception: exp,
-        investigation: invDoc,
-        policyResult,
-        batchId
-      });
-    }
-
-    const metrics = await EvaluationEngine.evaluateBatch(batchId, 1200);
+    // 2. Clear any batch processing status tracking
+    batchProcessingStatus.clear();
 
     res.status(200).json({
       success: true,
-      message: 'System database successfully reset to pristine benchmark dataset (BATCH-FR-DEMO).',
-      batchId,
+      message: 'All data has been reset successfully. No entries remain in the system.',
+      batchId: null,
       summary: {
-        totalRecords: genSummary.totalRecords,
-        matchedCount: reconResult.summary.matchedCount,
-        exceptionCount: reconResult.summary.exceptionCount,
-        autoResolvedCount: metrics.totalAutoResolved,
-        escalatedCount: metrics.totalEscalated
+        totalRecords: 0,
+        matchedCount: 0,
+        exceptionCount: 0,
+        autoResolvedCount: 0,
+        escalatedCount: 0
       }
     });
   } catch (error) {

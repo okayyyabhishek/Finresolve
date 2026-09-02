@@ -25,8 +25,25 @@ router.get('/metrics', async (req: Request, res: Response, next: NextFunction): 
     const batchId = await resolveBatchId(req.query.batchId);
     if (!batchId) {
       res.status(200).json({
-        status: 'not_evaluated',
-        message: 'No batch data exists in database. Please generate and process a batch first.'
+        status: 'empty',
+        message: 'No batch data exists in database.',
+        batchId: null,
+        totalActualExceptions: 0,
+        totalAutoResolved: 0,
+        totalEscalated: 0,
+        coverage: 0,
+        autoResolutionAccuracy: 0,
+        exceptionDetectionAccuracy: 0,
+        falseAutoResolutionRate: 0,
+        precision: 0,
+        recall: 0,
+        f1Score: 0,
+        financialErrorExposure: '₹0.00',
+        escalationRate: 0,
+        averageInvestigationDurationMs: 0,
+        wallClockDurationMs: 0,
+        falseAutoResolutions: 0,
+        falseEscalations: 0
       });
       return;
     }
@@ -47,8 +64,16 @@ router.get('/coverage-risk', async (req: Request, res: Response, next: NextFunct
     const batchId = await resolveBatchId(req.query.batchId);
     if (!batchId) {
       res.status(200).json({
-        status: 'not_evaluated',
-        message: 'No batch data exists in database. Please generate and process a batch first.'
+        status: 'empty',
+        batchId: null,
+        sweep: [],
+        optimalThreshold: 0.85,
+        optimalMetrics: {
+          coverage: 0,
+          accuracy: 0,
+          falseResolutions: 0,
+          financialRisk: '₹0.00'
+        }
       });
       return;
     }

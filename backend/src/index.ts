@@ -35,14 +35,20 @@ app.use(
       if (!origin) return callback(null, true);
       
       const normalizedOrigin = origin.replace(/\/$/, '');
-      const configuredFrontend = env.FRONTEND_URL ? env.FRONTEND_URL.replace(/\/$/, '') : '';
+      const configuredFrontends = (env.FRONTEND_URL || '')
+        .split(',')
+        .map((u) => u.trim().replace(/\/$/, ''))
+        .filter(Boolean);
 
       const allowedOrigins = [
-        configuredFrontend,
+        ...configuredFrontends,
         'http://localhost:3000',
         'http://localhost:3001',
         'http://localhost:3002',
-        'http://localhost:5173'
+        'http://localhost:5173',
+        'http://16.171.43.78',
+        'http://16.171.43.78:3000',
+        'http://16.171.43.78:80'
       ].filter(Boolean);
 
       const isVercelDomain = /^https:\/\/[a-zA-Z0-9_-]+\.vercel\.app$/.test(normalizedOrigin);
