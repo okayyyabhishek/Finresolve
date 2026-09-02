@@ -134,12 +134,12 @@ router.post('/upload', async (req: Request, res: Response, next: NextFunction): 
 
       if (parsedCsv.errors.length > 0) {
         const criticalErrors = parsedCsv.errors.filter(
-          (e) => e.type === 'Delimiter' || (e as any).code === 'UndetectableDelimiter'
+          (e: any) => e.type === 'Delimiter' || e.code === 'UndetectableDelimiter'
         );
         if (criticalErrors.length > 0) {
           res.status(400).json({
             error: 'CSV parsing failed',
-            details: criticalErrors.map((e) => ({ row: e.row, message: e.message }))
+            details: criticalErrors.map((e: any) => ({ row: e.row, message: e.message }))
           });
           return;
         }
