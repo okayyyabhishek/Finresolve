@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+
+# Environment files (may contain secrets)
+.env
+.env.local
+.env.*.local
+
+# Vite cache
+.vite/
+
+# Coverage & logs
+coverage/
+*.log
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

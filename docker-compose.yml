@@ -1,0 +1,49 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: finresolve-mongodb
+    restart: unless-stopped
+    # MongoDB is only accessible within the Docker network (not exposed to host)
+    expose:
+      - "27017"
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: finresolve
+      MONGO_INITDB_ROOT_USERNAME: finresolve_admin
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-finresolve_secure_2026}
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: finresolve-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    depends_on:
+      - mongodb
+    environment:
+      MONGODB_URI: mongodb://finresolve_admin:${MONGO_PASSWORD:-finresolve_secure_2026}@mongodb:27017/finresolve?authSource=admin
+      MONGODB_DB_NAME: finresolve
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.6-flash}
+      PORT: 3001
+      NODE_ENV: production
+      FRONTEND_URL: http://localhost:3000
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:3001/api/v1
+    container_name: finresolve-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo-data:
